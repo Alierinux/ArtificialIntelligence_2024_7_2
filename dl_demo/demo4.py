@@ -1,0 +1,17 @@
+import torch
+x = torch.randn(150, 4)
+print(x.shape)
+# 4 10 6 3
+w1 = torch.randn(10,4)
+b1 = torch.randn(10)
+l1 = torch.nn.functional.linear(input=x, weight=w1, bias=b1)
+print(l1.shape)
+w2 = torch.randn(6,10)
+b2 = torch.randn(6)
+l2 = torch.nn.functional.linear(input=l1, weight=w2, bias=b2)
+print(l2.shape)
+w3 = torch.randn(3,6)
+b3 = torch.randn(3)
+l3 = torch.nn.functional.linear(input=l2, weight=w3, bias=b3)
+print(l3.shape)
+print(l3)
