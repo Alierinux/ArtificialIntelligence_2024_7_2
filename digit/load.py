@@ -21,14 +21,4 @@ def load_label_fromfile(filename):
     return labels_
 
 
-train_imgs = load_image_fromfile('data/train-images.idx3-ubyte')
-train_labels = load_label_fromfile('data/train-labels.idx1-ubyte')
-print(train_imgs.shape)
-print(train_labels.shape)
-test_imgs = load_image_fromfile('data/t10k-images.idx3-ubyte')
-test_labels = load_label_fromfile('data/t10k-labels.idx1-ubyte')
-print(test_imgs.shape)
-print(test_labels.shape)
-img1 = train_imgs[50000]
-import cv2
-cv2.imwrite("img.png",img1)
+
