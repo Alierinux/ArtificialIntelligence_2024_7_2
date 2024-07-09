@@ -1,71 +1,69 @@
-import load
+import os.path
+from torchvision.models import resnet18
 import torch
-from lenet import  LeNet
-# load.load_image_fromfile()
-# load.load_label_fromfile()
-train_imgs = load.load_image_fromfile('data/train-images.idx3-ubyte')
-train_labels = load.load_label_fromfile('data/train-labels.idx1-ubyte')
-test_imgs = load.load_image_fromfile('data/t10k-images.idx3-ubyte')
-test_labels = load.load_label_fromfile('data/t10k-labels.idx1-ubyte')
-# print(train_imgs.shape)
-# data==》Tenser
-# 多分类：交叉熵损失函数：（y）长整型
-# N * 28 * 28 ===>   N * C * H * W
-x = torch.Tensor(train_imgs).view(
-    train_imgs.shape[0],
-    1,
-    train_imgs.shape[1],
-    train_imgs.shape[2])
-y = torch.LongTensor(train_labels)
+from loaddata import load_data
+class TrainResNet18:
+    def __init__(self, img_dir="./dataset", epoch=100, batch_size=128, learing_rate=0.01):
+        super().__init__()
+        print("准备训练....")
+        # 模型保存的位置
+        self.model_file = "garbage.mod"
+        # GPU是否可用 True False
+        self.CUDA = torch.cuda.is_available()
+        # 数据集
+        self.tr, self.ts, self.cls_idx = load_data(img_dir, batch_size=batch_size)
+        # 初始化模型结构
+        self.net = resnet18()
+        fc_in = self.net.fc.in_features
+        self.net.fc = torch.nn.Linear(fc_in, 40)
+        if self.CUDA:
+            self.net.cuda()  #cpu==>gpu
+        if os.path.exists(self.model_file):
+            print("加载本地模型，继续训练")
+            state_dict = torch.load(self.model_file)
+            self.net.load_state_dict(state_dict)
+        else:
+            print("从头训练")
 
-test_x = torch.Tensor(test_imgs).view(
-    test_imgs.shape[0],
-    1,
-    test_imgs.shape[1],
-    test_imgs.shape[2])
-test_y = torch.LongTensor(test_labels)
+        self.lr = learing_rate
+        self.epoch = epoch
+        self.opt = torch.optim.Adam(self.net.parameters(), lr=self.lr)
+        self.loss_function = torch.nn.CrossEntropyLoss()
+        if self.CUDA:
+            self.loss_function = self.loss_function.cuda()
 
-train_dataset = torch.utils.data.TensorDataset(x, y)
-test_dataset = torch.utils.data.TensorDataset(test_x,test_y)
+    def train(self):
+        print("开始训练")
+        for e in range(self.epoch):
+            self.net.train()
+            for samples, labels in self.tr:
+                self.opt.zero_grad()
+                if self.CUDA:
+                    samples = samples.cuda()
+                    labels = labels.cuda()
+                y = self.net(samples.view(-1,3,224,224))
+                loss = self.loss_function(y, labels)
+                loss.backward()
+                self.opt.step()
+            # 测试
+            c_rate = self.validate()
+            print(F"轮数：{e},准确率：{c_rate}")
+            # 保存模型
+            torch.save(self.net.state_dict(),self.model_file)
+    @torch.no_grad()
+    def validate(self):
+        num_samples = 0
+        num_correct = 0
+        for samples, labels in self.ts:
+            if self.CUDA:
+                samples = samples.cuda()
+                labels = labels.cuda()
+            num_samples += len(samples)
+            out = self.net(samples.view(-1,3,224,224))
+            out = torch.nn.functional.softmax(out, dim=1)
+            y = torch.argmax(out,dim=1)
+            num_correct += (y==labels).float().sum()
+        return  num_correct * 100 / num_samples
 
-train_loader = torch.utils.data.DataLoader(
-    dataset=train_dataset,
-    shuffle=True,
-    batch_size=1024)
-test_loader = torch.utils.data.DataLoader(dataset=test_dataset,shuffle=True,batch_size=10000)
-
-
-model = LeNet()
-epoch = 100
-# 损失函数
-crel = torch.nn.CrossEntropyLoss()
-# 优化器
-opt = torch.optim.Adam(model.parameters(), lr=0.01)
-# 轮epoch
-for e in range(epoch):
-    # 批 batch
-    for data,target in train_loader:
-        # 小批量梯度下降
-        opt.zero_grad()
-        output = model(data)
-        loss = crel(output,target)
-        loss.backward()
-        # 更新权重
-        opt.step()
-    # 测试当前轮 模型的准确率和损失值  测试集
-    with torch.no_grad():
-        for x,y in test_loader:
-            y_ = model(x) # N*[,,,,,]
-            y_ = torch.nn.functional.log_softmax(y_,dim=1)
-            predict = torch.argmax(y_,dim=1)
-            c_rate= (predict == y).float().mean()
-            print(f"轮：{e},------准确率：{c_rate}")
-            # [1,1,1,0]
-            # [1,1,0,0]
-            # [1,1,0,1]  (1+1+0+1)/4
-    # 保存模型
-    state_dict = model.state_dict()
-    torch.save(state_dict, './lenet.pth')
-
-
-
+t = TrainResNet18(epoch=2)
+t.train()
